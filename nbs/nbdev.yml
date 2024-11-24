@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "cocogold"
+  site-url: "https://pcuenca.github.io/cocogold"
+  description: "CoCo Segmentation for Marigold"
+  repo-branch: main
+  repo-url: "https://github.com/pcuenca/cocogold"
