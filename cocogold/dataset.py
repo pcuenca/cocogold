@@ -32,7 +32,8 @@ def get_patch(landmarks, color='white', closed=False):
         ops.append(Path.CLOSEPOLY)
         facecolor = color
     path = Path(contour, ops)
-    return patches.PathPatch(path, facecolor=facecolor, edgecolor=color, lw=4)
+    # Disable antialiasing to keep only 0 and 1 values
+    return patches.PathPatch(path, facecolor=facecolor, edgecolor=color, lw=4, antialiased=False)
 
 def segmented_mask(segments, width=512, height=512):
     # Precisely control output image size
@@ -70,7 +71,7 @@ def segment_pairs(coordinates_list):
     """
     return list(zip(coordinates_list[::2], coordinates_list[1::2]))
 
-# %% ../nbs/coco-semantic.ipynb 49
+# %% ../nbs/coco-semantic.ipynb 51
 from random import randint
 
 def random_square_crop_and_resize(pilimg, size=512):
@@ -90,7 +91,7 @@ def random_square_crop_and_resize(pilimg, size=512):
         "scale": float(size)/minsize
     }
 
-# %% ../nbs/coco-semantic.ipynb 57
+# %% ../nbs/coco-semantic.ipynb 59
 def transformed_segments(segmentation, crop_rect, scale):
     segments = segment_pairs(segmentation)
     
@@ -103,7 +104,7 @@ def transformed_segments(segmentation, crop_rect, scale):
     segments = map(lambda s: transform_segment(s), segments)
     return list(segments)
 
-# %% ../nbs/coco-semantic.ipynb 62
+# %% ../nbs/coco-semantic.ipynb 64
 import math
 import random
 from collections import namedtuple
@@ -111,7 +112,7 @@ from functools import partial
 
 Rect = namedtuple("Rect", "x0 y0 x1 y1")
 
-# %% ../nbs/coco-semantic.ipynb 63
+# %% ../nbs/coco-semantic.ipynb 65
 def is_contained(annotation, crop_rect):
     """Returns true if the annotation is fully contained inside the crop_rect."""
     crop_x0, crop_y0, crop_x1, crop_y1 = crop_rect
@@ -123,7 +124,7 @@ def is_contained(annotation, crop_rect):
     contained = contained and y1 <= crop_y1
     return contained
 
-# %% ../nbs/coco-semantic.ipynb 64
+# %% ../nbs/coco-semantic.ipynb 66
 def is_partially_contained(annotation, crop_rect):
     """
     Returns true if:
@@ -147,7 +148,7 @@ def is_partially_contained(annotation, crop_rect):
         return (dx*dy)/crop_area >= 0.15
     return False
 
-# %% ../nbs/coco-semantic.ipynb 74
+# %% ../nbs/coco-semantic.ipynb 76
 def semantic_transformed_segments(annotations, annotation, crop_rect, scale):
     """Return a list of transformerd segments for all the instances
     with the same class of the given annotation."""
@@ -157,18 +158,18 @@ def semantic_transformed_segments(annotations, annotation, crop_rect, scale):
 
     return [transformed_segments(s, crop_rect, scale) for s in instances_segments]
 
-# %% ../nbs/coco-semantic.ipynb 91
+# %% ../nbs/coco-semantic.ipynb 93
 import torch
 from torch.utils.data import Dataset
 
-# %% ../nbs/coco-semantic.ipynb 92
+# %% ../nbs/coco-semantic.ipynb 94
 def is_crowd(annotation):
     return "counts" in annotation["segmentation"]
 
 def is_valid(annotation, crop_rect):
     return is_partially_contained(annotation, crop_rect) and not is_crowd(annotation)
 
-# %% ../nbs/coco-semantic.ipynb 93
+# %% ../nbs/coco-semantic.ipynb 95
 class CocoControlNetDataset(Dataset):
     """
     A dataset for COCO 2017 semantic segmentation, suitable for Marigold training (hopefully).
