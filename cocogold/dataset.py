@@ -3,7 +3,7 @@
 # %% auto 0
 __all__ = ['Rect', 'class_name', 'get_patch', 'segmented_mask', 'segment_pairs', 'random_square_crop_and_resize',
            'transformed_segments', 'is_contained', 'is_partially_contained', 'semantic_transformed_segments',
-           'is_crowd', 'is_valid', 'CocoControlNetDataset']
+           'is_crowd', 'is_valid', 'CocoGoldDataset']
 
 # %% ../nbs/coco-semantic.ipynb 3
 import matplotlib.pyplot as plt
@@ -170,7 +170,7 @@ def is_valid(annotation, crop_rect):
     return is_partially_contained(annotation, crop_rect) and not is_crowd(annotation)
 
 # %% ../nbs/coco-semantic.ipynb 95
-class CocoControlNetDataset(Dataset):
+class CocoGoldDataset(Dataset):
     """
     A dataset for COCO 2017 semantic segmentation, suitable for Marigold training (hopefully).
     
