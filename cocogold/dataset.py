@@ -178,14 +178,26 @@ class CocoGoldDataset(Dataset):
     - A random crop of the original image.
     - A segmentation mask for one random category of an instance inside the crop.
     - The class name of the segmentation mask.
+
+    When return_type is "pil", images will be returned for the original and the mask. In this case, the mask background will be zero (black),
+    and the mask foreground (subject) will be 1 (white).
+    
+    If return_type is "pt", the original image will be converted to a PyTorch tensor and normalized to `[-1, 1]`,
+    and the mask will consist of `-1` values for the background and `1` for the subject. Images and masks have 
+    shapes `[3, H, W]`.
+    
+    In both cases, masks contain three identical channels.
     
     Note that results will be different each time you iterate. Larger subjects are selected with higher probability.
     """
     
-    def __init__(self, dataset_root, split="val", size=768):
+    def __init__(self, dataset_root, split="val", size=512, return_type="pil"):
         self.path = dataset_root
         self.split = split
         self.size = size
+        if return_type not in ["pil", "pt"]:
+            raise ValueError("Return type must be 'pil' or 'pt'")
+        self.return_type = return_type
         annotations_path = f"{self.path}/annotations/instances_{split}2017.json"
         self.coco = COCO(annotations_path)
         self.imgs = self.coco.getImgIds()
@@ -249,7 +261,11 @@ class CocoGoldDataset(Dataset):
         mask = segmented_mask(segments, width=self.size, height=self.size)
         
         category = class_name(annotation["category_id"], self.cats)
-        
+
+        if self.return_type == "pt":
+            pilimg = torch.tensor(np.array(pilimg).transpose(2, 0, 1) / 255.0 * 2.0 - 1.0)
+            mask = torch.tensor(np.array(mask).transpose(2, 0, 1) / 255.0 * 2.0 - 1.0)
+    
         return {
             "key": idx,
             "image": pilimg,
