@@ -263,8 +263,8 @@ class CocoGoldDataset(Dataset):
         category = class_name(annotation["category_id"], self.cats)
 
         if self.return_type == "pt":
-            pilimg = torch.tensor(np.array(pilimg).transpose(2, 0, 1) / 255.0 * 2.0 - 1.0)
-            mask = torch.tensor(np.array(mask).transpose(2, 0, 1) / 255.0 * 2.0 - 1.0)
+            pilimg = torch.tensor(np.array(pilimg, dtype=np.float32).transpose(2, 0, 1) / 255.0 * 2.0 - 1.0)
+            mask = torch.tensor(np.array(mask, dtype=np.float32).transpose(2, 0, 1) / 255.0 * 2.0 - 1.0)
     
         return {
             "key": idx,
