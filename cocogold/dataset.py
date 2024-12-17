@@ -3,7 +3,7 @@
 # %% auto 0
 __all__ = ['Rect', 'class_name', 'get_patch', 'segmented_mask', 'segment_pairs', 'random_square_crop_and_resize',
            'transformed_segments', 'is_contained', 'is_partially_contained', 'semantic_transformed_segments',
-           'is_crowd', 'is_valid', 'CocoGoldDataset']
+           'is_crowd', 'is_valid', 'crop_around_annotation', 'CocoGoldDataset', 'CocoGoldIterableDataset']
 
 # %% ../nbs/coco-semantic.ipynb 3
 import matplotlib.pyplot as plt
@@ -128,7 +128,7 @@ def is_contained(annotation, crop_rect):
 def is_partially_contained(annotation, crop_rect):
     """
     Returns true if:
-    - The bounding boxes overlap at least 60%
+    - The bounding boxes overlap at least 75%
     - Or the cropped annotation bbox takes more than 15% of the crop_rect area
     """
     crop = Rect(*crop_rect)
@@ -170,6 +170,44 @@ def is_valid(annotation, crop_rect):
     return is_partially_contained(annotation, crop_rect) and not is_crowd(annotation)
 
 # %% ../nbs/coco-semantic.ipynb 95
+import math
+
+def crop_around_annotation(annotation, pilimg, size=512):
+    bbox = annotation["bbox"]
+    # print(class_name(annotation["category_id"], cats))
+    # print(annotation)
+    x, y, w, h = (math.floor(bbox[0]), math.floor(bbox[1]), round(bbox[2]), round(bbox[3]))
+
+    width, height = pilimg.size
+    minsize = min(width, height)
+    if width > height:
+        # print("left")
+        if width - height > x:
+            # Free band ends beyond the beginning of the ann -> avoid clipping
+            x0 = randint(0, x)
+        else:
+            # Select "from the right"
+            x0 = randint(x - minsize + w, width - minsize)
+        y0 = 0
+    else:
+        # print("right")
+        x0 = 0
+        if height - width > y:
+            # Free band ends beyond the beginning of the ann -> avoid clipping
+            y0 = randint(0, y)
+        else:
+            # Select "from the bottom"
+            y0 = randint(y - minsize + h, height - minsize)
+        
+    pilimg = pilimg.crop((x0, y0, x0 + minsize, y0 + minsize))
+    pilimg = pilimg.resize((size, size), resample=Image.LANCZOS)
+    return {
+        "resized_image": pilimg,
+        "crop_rect": (x0, y0, x0+minsize, y0+minsize),
+        "scale": float(size)/minsize
+    }
+
+# %% ../nbs/coco-semantic.ipynb 97
 class CocoGoldDataset(Dataset):
     """
     A dataset for COCO 2017 semantic segmentation, suitable for Marigold training (hopefully).
@@ -191,7 +229,7 @@ class CocoGoldDataset(Dataset):
     Note that results will be different each time you iterate. Larger subjects are selected with higher probability.
     """
     
-    def __init__(self, dataset_root, split="val", size=512, return_type="pil"):
+    def __init__(self, dataset_root, split="val", size=512, max_items=None, return_type="pil", shuffle=True):
         self.path = dataset_root
         self.split = split
         self.size = size
@@ -203,6 +241,10 @@ class CocoGoldDataset(Dataset):
         self.imgs = self.coco.getImgIds()
         self.cats = self.coco.loadCats(self.coco.getCatIds())
         self._remove_empty()
+        self._remove_small()
+        if max_items is not None:
+            self.imgs = self.imgs[:max_items]
+        self.shuffle(shuffle) 
         
     def _remove_empty(self):
         print("Filtering images with no annotations")
@@ -211,7 +253,22 @@ class CocoGoldDataset(Dataset):
             return len(ann_ids) > 0
         
         self.imgs = [img for img in self.imgs if has_annotations(img)]
+
+    # Some images have aspect ratios like 4:1, with width=640, height=160
+    # with very visible artifacts that are made worse when upscaling
+    def _remove_small(self, threshold=300):
+        print("Filtering images whose height or width < 300")
         
+        def is_small(img_id):
+            img_info = self.coco.loadImgs(img_id)[0]
+            if img_info["width"] < threshold:
+                return True
+            if img_info["height"] < threshold:
+                return True
+            return False
+        
+        self.imgs = [img for img in self.imgs if not is_small(img)]
+
     def __len__(self):
         return len(self.imgs)
     
@@ -220,9 +277,34 @@ class CocoGoldDataset(Dataset):
         pilimg = Image.open(f"{self.path}/images/{self.split}/{img_info['file_name']}")    
         resized_dict = random_square_crop_and_resize(pilimg, size=self.size)
         return resized_dict["resized_image"], resized_dict["crop_rect"], resized_dict["scale"]
-    
-    def __getitem__(self, idx):
-        img = self.imgs[idx]
+
+    def resized_around_ann(self, ann, img_info):
+        """Return a tuple resized_image, crop_rect and scale that contains the annotation"""
+        pilimg = Image.open(f"{self.path}/images/{self.split}/{img_info['file_name']}")    
+        resized_dict = crop_around_annotation(ann, pilimg, size=self.size)
+        return resized_dict["resized_image"], resized_dict["crop_rect"], resized_dict["scale"]
+
+    def random_annotation_proportional_to_area(self, anns):
+        min_area = max_area = anns[0]["area"]
+        for annotation in anns[1:]:
+            area = annotation["area"]
+            min_area = min(area, min_area)
+            max_area = max(area, max_area)
+        indices = []
+        for i, annotation in enumerate(anns):
+            area = annotation["area"]
+            reps = round(1 + math.log2(area/min_area))
+            indices.extend([i] * reps)
+        return anns[random.choice(indices)]
+
+    def shuffle(self, do_shuffle):
+        indices = list(range(len(self.imgs)))
+        if do_shuffle:
+            random.shuffle(indices)
+        self.shuffled = indices
+
+    def _do_getitem(self, idx):
+        img = self.imgs[self.shuffled[idx]]
         anns = self.coco.loadAnns(self.coco.getAnnIds(img))
         img_info = self.coco.loadImgs(img)[0]
         
@@ -233,22 +315,19 @@ class CocoGoldDataset(Dataset):
             contained_fn = partial(is_valid, crop_rect=crop_rect)
             contained = list(filter(contained_fn, anns))
             if len(contained) > 0: break
-        
+
+        # If we still have no annotations, select an annotation and crop around it
         if len(contained) == 0:
-            return None
-        
-        min_area = max_area = contained[0]["area"]
-        for annotation in contained[1:]:
-            area = annotation["area"]
-            min_area = min(area, min_area)
-            max_area = max(area, max_area)
-        indices = []
-        for i, annotation in enumerate(contained):
-            area = annotation["area"]
-            reps = round(1 + math.log2(area/min_area))
-            indices.extend([i] * reps)
-        
-        annotation = contained[random.choice(indices)]
+            for ann in anns:
+                pilimg, crop_rect, scale = self.resized_around_ann(ann, img_info)
+                # contained_fn is also used later on, we need to update
+                contained_fn = partial(is_valid, crop_rect=crop_rect)
+                if contained_fn(ann):
+                    break
+            contained = [ann]
+            # print("Actually contained:", contained_fn(ann))
+
+        annotation = self.random_annotation_proportional_to_area(contained)
 
         # Gather segments from all instances of the same class as the selected choice
         # but consider only valid annotations
@@ -263,12 +342,39 @@ class CocoGoldDataset(Dataset):
         category = class_name(annotation["category_id"], self.cats)
 
         if self.return_type == "pt":
-            pilimg = torch.tensor(np.array(pilimg, dtype=np.float32).transpose(2, 0, 1) / 255.0 * 2.0 - 1.0)
+            pilimg = torch.tensor(np.array(pilimg.convert("RGB"), dtype=np.float32).transpose(2, 0, 1) / 255.0 * 2.0 - 1.0)
             mask = torch.tensor(np.array(mask, dtype=np.float32).transpose(2, 0, 1) / 255.0 * 2.0 - 1.0)
     
         return {
             "key": idx,
+            "filename": img_info['file_name'],
             "image": pilimg,
             "mask": mask,
             "class": category,
         }
+
+    def __getitem__(self, idx):
+        try:
+            return self._do_getitem(idx)
+        except:
+            return None
+
+# %% ../nbs/coco-semantic.ipynb 112
+from torch.utils.data import IterableDataset
+
+class CocoGoldIterableDataset(IterableDataset):
+    """
+    Please, refer to the docstring of CocoGoldDataset.
+    This is just an iterable wrapper that skips `None` values.
+    """
+    
+    def __init__(self, dataset_root, split="val", size=512, max_items=None, return_type="pil", shuffle=True):
+        super().__init__()
+        self.dataset = CocoGoldDataset(dataset_root, split=split, size=size, max_items=max_items, return_type=return_type, shuffle=shuffle)
+        self.shuffle = shuffle
+
+    def __iter__(self):
+        self.dataset.shuffle(self.shuffle)
+        for item in self.dataset:
+            if item is not None:
+                yield item
