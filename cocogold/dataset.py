@@ -246,9 +246,10 @@ class CocoGoldDataset(Dataset):
         self.cats = self.coco.loadCats(self.coco.getCatIds())
         self._remove_empty()
         self._remove_small()
-        if max_items is not None:
-            self.imgs = self.imgs[:max_items]
-        self.shuffle(seed) 
+        if max_items is not None and max_items < len(self.imgs):
+            generator = random.Random(seed) if seed is not None else random.Random()
+            self.imgs = generator.sample(self.imgs, max_items)
+        self.shuffle(seed)
         
     def _remove_empty(self):
         print("Filtering images with no annotations")
