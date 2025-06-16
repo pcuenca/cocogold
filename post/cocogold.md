@@ -132,4 +132,5 @@ There are a few things I still haven't done that would be cool to complete:
 - Evaluate the model using a segmentation metric like IoU, to see how good it actually is. I just wanted to explore whether we could train a text-grounded segmentation model with diffusion, but I have no idea how it performs.
 - Measure how good the model is on classes we used during training vs classes we didn't use.
 - Train with more classes.
+- Ensembling during inference. Since the diffusion process is stochastic, results are slightly different each time you run inference. The original Marigold for depth estimation uses the median (or average) of a few predictions, but I haven't tested this yet on this task.
 - Improve text understanding by using synonyms or varied phrases, instead of just the COCO class name. Better yet, we could use a VLM to create a short caption for the desired object and train with that. During inference, we could give instructions using descriptions like "please, select the girl that is closest to the door". This should improve generalization, and is super cool.
