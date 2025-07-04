@@ -126,7 +126,15 @@ To solve this problem, I resorted to old-school image processing algorithms that
 [!NOTE]  
 Erosion and dilation are part of a family of _morphological operations_. The combination of erosion followed by dilation is also known as _morphological opening_. You don't need to know these names, unless you find them in papers or something.
 
-In hindsight, I should have selected a different color for the masks. A pure green color like the one used for chroma keys in video sets could probably work – if it's good enough for TV it should be ok for training, right? Perhaps I could quickly fine-tune the model to replace the color and see if it works without having to post-process the mask.
+However, this algorithm fails for images that actually contain almost white pixels, like those with overblown skies. This example illustrates a failing case using the clock image example:
+
+![Clock failing example](clock-original-and-failed-mask.png)
+
+To solve this problem, I cheated by pre-processing the input. Instead of passing the original image for prediction, I desaturate white-ish pixels before running inference, to ensure that no white pixels are present in the input. Because the model is trained to accurately replicate the input, the output won't have white pixels either –except for the mask. This is what the desaturated image and the inferred mask look like:
+
+![Clock: desaturating before prediction](clock-desaturated-with-mask.png)
+
+In hindsight, I should have selected a different color for the masks. A pure green color like the one used for chroma keys in video sets could probably work – if it's good enough for TV it should be ok for training, right? Perhaps I could quickly fine-tune the model to replace the color and see if it works without having to post-process the mask or pre-process the inputs.
 
 #### Generalization
 
