@@ -1,4 +1,4 @@
-# cocogold: training Marigold for text-grounded object segmentation
+# cocogold: training Marigold for text-grounded segmentation
 
 [Marigold](https://github.com/prs-eth/Marigold) is a diffusion-based method for depth estimation ([paper](https://hf.co/papers/2312.02145), [demo](https://huggingface.co/spaces/prs-eth/marigold)) that was later extended to other tasks, such as normals estimation ([paper](https://hf.co/papers/2505.09358), [demo](https://huggingface.co/spaces/prs-eth/marigold-intrinsics)). I always wondered if a similar method could be applied to segmentation, which has some differences compared with the tasks Marigold was designed for. I've been working on it as an on-off side project, and here's my report (TL;DR: I trained a proof of concept model, and it works 😎)
 
@@ -8,7 +8,7 @@ However, Marigold uses Stable Diffusion (SD) just as a vision backbone, complete
 
 The question I wanted to solve is: what if we could use a similar method to estimate segmentation masks, using text to describe the object we want to find?
 
-![cocogold task](cocogold-task.png)
+![cocogold task](https://cdn-uploads.huggingface.co/production/uploads/603d25b75f9d390ab190b777/4ImeL7SFgW5mmmNemXWo4.png)
 
 Turns out we can! I worked on a proof-of-concept as a side project. I used the COCO dataset for simplicity, and reused the Marigold method with some tweaks. My side project was thus born as `cocogold`.
 
@@ -16,7 +16,7 @@ Turns out we can! I worked on a proof-of-concept as a side project. I used the C
 
 As shown in the elephant image above, cocogold is able to estimate a segmentation mask from an arbitrary object in an image, using text to specify the object we are interested in. Not all images are as easy as that one, though. Sometimes the subject we want to extract is not a big fat elephant taking most of the photo. Consider the following examples taken from the validation set we used in our training run (we are displaying the masks as white areas overlapped on the image, for reasons we'll describe later):
 
-![cocogold examples](cocogold-examples.png)
+![cocogold examples](https://cdn-uploads.huggingface.co/production/uploads/603d25b75f9d390ab190b777/mfpZ1xO9P2DMG3522Mk5Y.png)
 
 As you can see, it works for non-salient objects in the photo, including small and partially ocluded ones. Amazingly, it also generalizes to unseen classes – the model was never trained to recognize elephants, but as you can see in the first example of this post, it was able to do it!
 
@@ -32,7 +32,7 @@ To see how cocogold works, let's see how it differs from Marigold.
 Marigold is based on the Stable Diffusion UNet, which is one of the models that comprise the Stable Diffusion pipeline. In Stable Diffusion, the UNet works with two inputs: a noisy input image, and a text prompt. The UNet's job, conceptually, is to predict a less noisy input image. It's designed to work in a loop: starting from pure gaussian noise, it progressively carves an image out of the noise, using the text description as a guide towards the result we want.
 
 <figure class="image text-center">
-  <img src="sd-iters.png" alt="Stable Diffusion Denoising">
+  <img src="https://cdn-uploads.huggingface.co/production/uploads/603d25b75f9d390ab190b777/jkjb0w01rSzeCKoRStYWB.png" alt="Stable Diffusion Denoising">
   <figcaption> Denoising process for prompt <i>"Portrait painting of Pedro Cuenca looking happy"</i>. Disclaimer: I'm not that person. </figcaption>
 </figure>
 
@@ -67,19 +67,19 @@ Training was done with [this fork of Marigold](https://github.com/pcuenca/marigo
 
 What's more interesting than my poor engineering practices is that my first training run didn't work.
 
-![cocogold failed run](cocogold-degenerate-training.png)
+![cocogold failed run](https://cdn-uploads.huggingface.co/production/uploads/603d25b75f9d390ab190b777/bK7QShyGBimcCKbO0pE4z.png)
 
 The training run looked promising: after just a few steps, I was getting reasonable masks. However, training for longer didn't improve results, and I saw lots of degenerate cases and objects that failed to be recognized at any step throught the process. I had a few guesses about why this was happening:
 
 - The model was being trained to predict just two values: background (shown as black), and mask. In most training cases, one takes more area than the other – usually it's the background that's larger than the subject to segment. Since I was using MSE as my loss function, I thought that maybe the model was learning to predict the most frequent value to minimize loss.
 
-[!NOTE]  
-This is only true at the conceptual level, as MSE loss is computed in latent space, not comparing the decoded pixels. But still, the dataset samples were imbalanced, even in latent space.
+> [!NOTE]
+> This is only true at the conceptual level, as MSE loss is computed in latent space, not comparing the decoded pixels. But still, the dataset samples were imbalanced, even in latent space.
 
 - I suspected that some objects are usually small, and the model may learn that, for example, "banana" always refers to something small. I did not fully verify if this was consistent.
 - The dataset also had a strong class imbalance, with the `person` class being overrepresented. This is an analysis of one full iteration over the full training dataset (remember that samples are random, so the numeric values are not necessarily exact):
 
-![cocogold dataset class distribution](coco-training-sorted.png)
+![cocogold dataset class distribution](https://cdn-uploads.huggingface.co/production/uploads/603d25b75f9d390ab190b777/ajm6OZzkCWPIuVYadY9y3.png)
 
 So training for longer could potentially be overfitting to `person` subjects. I should have conducted this analysis earlier :(
 
@@ -115,24 +115,24 @@ We are not done yet. We successfully created a model that does _not_ predict a s
 
 To create the segmentation mask, my approach was to filter the output to keep white-ish pixels and discard the rest. We have to filter with a certain tolerance because the model does not predict a perfect `1.0` pixel for every pixel in the mask, but something like `0.997` or `0.935`. This has a problem, however: real images also contain white pixels. It's rare that they are pure white (all channels close to `1.0`), but if you've ever seen a photo shot in the sun with an overblown white-ish sky, the chances to find white pixels are not neglibible. To illustrate the issue, this is a typical result when selecting white-ish pixels:
 
-![Computing mask from prediction](computing-mask.png)
+![Computing mask from prediction](https://cdn-uploads.huggingface.co/production/uploads/603d25b75f9d390ab190b777/ThK0BfklO1s4d-am6-rqs.png)
 
 As you can see, there are several white pixel outliers in unrelated places.
 
 To solve this problem, I resorted to old-school image processing algorithms that are still super useful. For this case of small outlier blotches, we can use an _erosion_ operation (pixels are replaced by the majority class of nearby pixels, removing noise), followed by _dilation_ (we expand shapes by adding pixels to the boundaries). This results in more or less the same shapes, with outliers removed. I did this with a small 3×3 convolution kernel, but you can achieve the same thing with pooling. This is the post-processed mask with outliers gone:
 
-![Morphological opening](morphological-opening.png)
+![Morphological opening](https://cdn-uploads.huggingface.co/production/uploads/603d25b75f9d390ab190b777/F4R6XxFlYJuCfTvWICVmb.png)
 
-[!NOTE]  
-Erosion and dilation are part of a family of _morphological operations_. The combination of erosion followed by dilation is also known as _morphological opening_. You don't need to know these names, unless you find them in papers or something.
+> [!NOTE]  
+> Erosion and dilation are part of a family of _morphological operations_. The combination of erosion followed by dilation is also known as _morphological opening_. You don't need to know these names, unless you find them in papers or something.
 
 However, this algorithm fails for images that actually contain almost white pixels, like those with overblown skies. This example illustrates a failing case using the clock image example:
 
-![Clock failing example](clock-original-and-failed-mask.png)
+![Clock failing example](https://cdn-uploads.huggingface.co/production/uploads/603d25b75f9d390ab190b777/tokjA_jSj60oOTtp8owtk.png)
 
 To solve this problem, I cheated by pre-processing the input. Instead of passing the original image for prediction, I desaturate white-ish pixels before running inference, to ensure that no white pixels are present in the input. Because the model is trained to accurately replicate the input, the output won't have white pixels either –except for the mask. This is what the desaturated image and the inferred mask look like:
 
-![Clock: desaturating before prediction](clock-desaturated-with-mask.png)
+![Clock: desaturating before prediction](https://cdn-uploads.huggingface.co/production/uploads/603d25b75f9d390ab190b777/Ags6FXXhm-8dGgdsKemqm.png)
 
 In hindsight, I should have selected a different color for the masks. A pure green color like the one used for chroma keys in video sets could probably work – if it's good enough for TV it should be ok for training, right? Perhaps I could quickly fine-tune the model to replace the color and see if it works without having to post-process the mask or pre-process the inputs.
 
