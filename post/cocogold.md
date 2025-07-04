@@ -4,7 +4,7 @@
 
 I love Marigold because it shows how to cleverly leverage an existing open model ([Stable Diffusion](https://huggingface.co/stabilityai/stable-diffusion-2)) and fine-tune it for a different task. Because Stable Diffusion was trained on a vast amount of images, its _image understanding_ capabilities are fantastic. By reusing this rich image representation knowledge, Marigold can be fine-tuned in just a few days using a single consumer GPU. Stable Diffusion is an excellent choice, because most of the computation happens in _latent space_ instead of working directly with the image pixels. Latent space is a fancy way to say that we are able to compress the input images by a big factor (`48`, in this case), and therefore computations are much faster and require a lot less memory.
 
-However, Marigold uses Stable Diffusion just as a vision backbone, completely ignoring that SD is equally capable of understanding _text_ that describes visual content. This is because depth or normals computation are pure computer vision tasks. Unlike Stable Diffusion –which was designed to generate an image based on a text description–, Marigold generates an image (i.e., the depth map), using the original image as the input to the model. This is akin to image-to-image generation tasks, but we only need an input image – text descriptions are not required.
+However, Marigold uses Stable Diffusion (SD) just as a vision backbone, completely ignoring that SD is equally capable of understanding _text_ that describes visual content. This is because depth or normals computation are pure computer vision tasks. Unlike Stable Diffusion –which was designed to generate an image based on a text description–, Marigold generates an image (i.e., the depth map), using the original image as the input to the model. This is akin to image-to-image generation tasks, but we only need an input image – text descriptions are not required.
 
 The question I wanted to solve is: what if we could use a similar method to estimate segmentation masks, using text to describe the object we want to find?
 
@@ -20,10 +20,8 @@ As shown in the elephant image above, cocogold is able to estimate a segmentatio
 
 As you can see, it works for non-salient objects in the photo, including small and partially ocluded ones. Amazingly, it also generalizes to unseen classes – the model was never trained to recognize elephants, but as you can see in the first example of this post, it was able to do it!
 
-<div style="background-color: #e6f9e6; padding: 8px 12px; outline: 1px solid; border-radius: 5px;">
-This is just an experimental proof-of-concept, not a SOTA segmentation method. But it's a super effective and interesting way to leverage image generation models for text-grounded computer vision tasks!
-</div>
-
+> [!NOTE]
+> This is just an experimental proof-of-concept, not a SOTA segmentation method. But it's a super effective and interesting way to leverage image generation models for text-grounded computer vision tasks!
 ## How does it work?
 
 To see how cocogold works, let's see how it differs from Marigold.
