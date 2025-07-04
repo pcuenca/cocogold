@@ -152,13 +152,14 @@ There's also the option to use regular segmentation models, but then the challen
 
 ## Summary of resources
 
-- [COCO dataset with instance segmentation data](https://huggingface.co/datasets/ariG23498/coco2017) that can be used for binary segmentation.
+- [Notebook with inference and examples](https://github.com/pcuenca/Marigold/blob/cocogold/cocogold-inference.ipynb).
+- [Mirror of the COCO dataset in Hugging Face](https://huggingface.co/datasets/pcuenq/coco-2017-mirror).
 - [Library to iterate through the dataset](https://github.com/pcuenca/cocogold), generating random crops and masks.
 - [Training code, forked from Marigold](https://github.com/pcuenca/Marigold/tree/cocogold).
 - [Final model trained](https://huggingface.co/pcuenq/marigold-coco-segmentation).
 - [Intermediate checkpoints](https://huggingface.co/pcuenq/marigold-coco-segmentation/tree/refs%2Fpr%2F1/checkpoint), they live in a branch of the previous repo.
 
-### What's next
+## What's next
 
 There are a few things I still haven't done that would be cool to complete:
 
@@ -167,3 +168,11 @@ There are a few things I still haven't done that would be cool to complete:
 - Train with more classes.
 - Ensembling during inference. Since the diffusion process is stochastic, results are slightly different each time you run inference. The original Marigold for depth estimation uses the median (or average) of a few predictions, but I haven't tested this yet on this task.
 - Improve text understanding by using synonyms or varied phrases, instead of just the COCO class name. Better yet, we could use a VLM to create a short caption for the desired object and train with that. During inference, we could give instructions using descriptions like "please, select the girl that is closest to the door". This should improve generalization, and is super cool.
+
+## Thank you! ❤️
+
+Very special thanks to [Aritra](https://huggingface.co/ariG23498) for enthusiastically jumping into the project and making it better, looking forward to working on some of the topics we discussed! 🫶
+
+Thanks a lot to my Hugging Frace friends and colleagues [vb](https://huggingface.co/reach-vb), [Sergio](https://huggingface.co/sergiopaniego), [Sayak](https://huggingface.co/sayakpaul), [Merve](https://huggingface.co/merve) for discussing these ideas, reading drafts of this post and providing great suggestions.
+
+This project wouldn't have been possible with Marigold, thanks [Anton](https://huggingface.co/toshas) and team for sharing with the community, and for the inspiration!
