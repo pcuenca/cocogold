@@ -2,7 +2,7 @@
 
 > Marigold-based, text-grounded CoCo Segmentation
 
-This is just the dataset preparation code. The training code [lives here](https://github.com/pcuenca/Marigold/tree/cocogold).
+This is just the dataset preparation code for [the cocogold project](https://huggingface.co/blog/pcuenq/cocogold). The training code [lives here](https://github.com/pcuenca/Marigold/tree/cocogold).
 
 ## Usage
 
